@@ -1,9 +1,4 @@
-"""
-Streamlit UI for the financial-document RAG assistant.
 
-Run:
-    streamlit run app.py
-"""
 import os
 import streamlit as st
 
@@ -12,7 +7,62 @@ from src.vectorstore import VectorStore
 from src.rag_pipeline import RagPipeline
 from src.security import RateLimiter
 
-st.set_page_config(page_title="Financial Document Assistant", page_icon="📊", layout="centered")
+st.set_page_config(page_title="Bluepeak Fund Assistant", page_icon="📊", layout="centered")
+
+CUSTOM_CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Inter', sans-serif;
+}
+
+/* App title block */
+.app-header {
+    padding: 1.5rem 0 1rem 0;
+    border-bottom: 1px solid #E4E1DA;
+    margin-bottom: 1.5rem;
+}
+.app-header h1 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #1F2430;
+    margin-bottom: 0.15rem;
+}
+.app-header p {
+    font-size: 0.9rem;
+    color: #6B7280;
+    margin: 0;
+}
+
+/* Chat messages */
+[data-testid="stChatMessage"] {
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.6rem;
+    border: 1px solid #E4E1DA;
+}
+
+/* Buttons */
+.stButton>button, [data-testid="stChatInput"] textarea {
+    border-radius: 8px;
+}
+
+/* Source citation chips */
+.source-chip {
+    display: inline-block;
+    background: #F0EEE7;
+    border: 1px solid #E4E1DA;
+    border-radius: 6px;
+    padding: 0.2rem 0.6rem;
+    margin: 0.15rem 0.3rem 0.15rem 0;
+    font-size: 0.78rem;
+    color: #1F2430;
+}
+.source-chip b { color: #8A6D2F; }
+</style>
+"""
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 # --- Rate limiter, one per server process (see README for scaling notes) ---
 if "rate_limiter" not in st.session_state:
@@ -35,15 +85,22 @@ def load_pipeline():
     return RagPipeline(store)
 
 
-st.title("📊 Financial Document Assistant")
-st.caption("RAG over fund factsheets — answers are grounded in the source documents, with citations.")
+st.markdown(
+    """
+    <div class="app-header">
+        <h1>Bluepeak Fund Assistant</h1>
+        <p>Answers are grounded in the loaded fund documents, with page-level citations.</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 pipeline = load_pipeline()
 
 if pipeline is None:
-    st.warning(
-        "No index found yet. Run `python scripts/build_index.py` in your terminal first "
-        "(after adding your GOOGLE_API_KEY to .env), then reload this page."
+    st.info(
+        "**No documents indexed yet.**\n\n"
+        "Run `python scripts/build_index.py` in your terminal, then reload this page."
     )
     st.stop()
 
@@ -68,7 +125,12 @@ if query:
                 result = pipeline.answer(query)
             st.markdown(result.answer)
 
-            with st.expander(f"Sources ({len(result.sources)} chunks retrieved)"):
+            chip_html = "".join(
+                f'<span class="source-chip"><b>p.{src.page}</b> {os.path.basename(src.source)}</span>'
+                for src in result.sources
+            )
+            st.markdown(chip_html, unsafe_allow_html=True)
+            with st.expander("View retrieved passages"):
                 for i, src in enumerate(result.sources, start=1):
                     st.markdown(f"**{i}. {os.path.basename(src.source)} — page {src.page}** (`{src.chunk_type}`, score {src.score:.3f})")
                     st.text(src.text[:400] + ("..." if len(src.text) > 400 else ""))
